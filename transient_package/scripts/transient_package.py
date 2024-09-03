@@ -70,6 +70,13 @@ def pip_options(func):
 
 ##### ##### ##### ##### #####
 
+def _invoke_code(interpreter, code):
+  # Run the provided code using the specified interpreter and capture the output
+  output = subprocess.check_output([interpreter, "-c", code], stderr=subprocess.DEVNULL)
+
+  # Decode and return the output as a string, stripping any trailing whitespace
+  return output.decode("utf-8").rstrip()
+
 def _log_and_exit(*args, **kwargs):
   # Log error if the uninstallation failed
   logger.error(*args, **kwargs)
@@ -107,7 +114,7 @@ def _install(source, source_version, target, target_version, interpreter):
   if source_version is None:
     try:
       # Retrieve the version of the source package
-      source_version = subprocess.check_output([interpreter, "-c", f"import importlib.metadata; print(importlib.metadata.version('{source}'))"], stderr=subprocess.DEVNULL)
+      source_version = _invoke_code(interpreter, f"import importlib.metadata; print(importlib.metadata.version('{source}'))")
 
       # Mark source package as installed
       source_installed = True
@@ -153,7 +160,7 @@ def _install(source, source_version, target, target_version, interpreter):
 def _uninstall(interpreter, package):
   try:
     # Retrieve the wheel metadata for the specified package
-    wheel = subprocess.check_output([interpreter, "-c", f"import importlib.metadata; print(importlib.metadata.distribution('{package}').read_text('WHEEL'))"], stderr=subprocess.DEVNULL)
+    wheel = _invoke_code(interpreter, f"import importlib.metadata; print(importlib.metadata.distribution('{package}').read_text('WHEEL'))")
   except subprocess.CalledProcessError:
     _log_and_exit("package '%s' not found", package)
 
