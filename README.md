@@ -5,7 +5,7 @@ CLI utility for creating transient Python packages.
 ## Installation
 
 ```sh
-$ pip3 install transient-package
+pip install transient-package
 ```
 
 ## Usage
@@ -13,10 +13,10 @@ $ pip3 install transient-package
 ### Create a transient package
 
 ```sh
-$ transient-package create \
-    --source triton        \
-    --target triton-pascal \
-    --output-directory .
+transient-package create \
+  --source triton        \
+  --target triton-pascal \
+  --output-directory .
 ```
 
 #### Result
@@ -26,12 +26,12 @@ A `triton` package with version `0.0.0` will be created, which depends on the `t
 ### Create a transient package with explicit versions
 
 ```sh
-$ transient-package create \
-    --source triton        \
-    --source-version 3.0.0 \
-    --target triton-pascal \
-    --target-version 3.0.0 \
-    --output-directory .
+transient-package create \
+  --source triton        \
+  --source-version 3.0.0 \
+  --target triton-pascal \
+  --target-version 3.0.0 \
+  --output-directory .
 ```
 
 #### Result
@@ -42,8 +42,8 @@ A `triton` package with version `3.0.0` will be created, which depends on the `t
 
 ```sh
 $ transient-package install \
-    --source triton         \
-    --target triton-pascal
+  --source triton         \
+  --target triton-pascal
 ```
 
 #### Result
@@ -61,7 +61,7 @@ The source package will be uninstalled before installing the transient package.
 ### Remove a transient package
 
 ```sh
-$ transient-package uninstall triton
+transient-package uninstall triton
 ```
 
 #### Result
