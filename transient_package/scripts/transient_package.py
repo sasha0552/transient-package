@@ -1,12 +1,12 @@
 import click
 import functools
 import glob
-import importlib.metadata
 import logging
 import os
 import subprocess
 import sys
 import tempfile
+import traceback
 
 from ..transient import TRANSIENT_GENERATOR, create_transient_package
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 ##### ##### ##### ##### #####
 
-def create_params(func):
+def create_options(func):
   @click.option(
     "-s",
     "--source",
@@ -54,7 +54,36 @@ def create_params(func):
     return func(*args, **kwargs)
   return wrapper
 
+def pip_options(func):
+  @click.option(
+    "-i",
+    "--interpreter",
+    default=sys.executable,
+    help="""
+      Path to the Python interpreter to be used when calling pip
+    """,
+  )
+  @functools.wraps(func)
+  def wrapper(*args, **kwargs):
+    return func(*args, **kwargs)
+  return wrapper
+
 ##### ##### ##### ##### #####
+
+def _log_and_exit(*args, **kwargs):
+  # Log error if the uninstallation failed
+  logger.error(*args, **kwargs)
+
+  # Capture and format the exception information
+  exc_type, exc_value, _trace = sys.exc_info()
+  exc_desc_lines = traceback.format_exception_only(exc_type, exc_value)
+  exc_desc = "".join(exc_desc_lines).rstrip()
+
+  # Log the exception details
+  logger.error(exc_desc)
+
+  # Exit the script with an error status
+  sys.exit(1)
 
 def _create(source, source_version, target, target_version, output_directory):
   # Generate the transient package and write it to the target directory
@@ -70,12 +99,18 @@ def _create(source, source_version, target, target_version, output_directory):
   # Log the creation of the transient package
   logger.info("created transient package '%s'", source)
 
-def _install(source, source_version, target, target_version):
+def _install(source, source_version, target, target_version, interpreter):
+  # Initialize flag to track if source package is installed
+  source_installed = False
+
   # Detect the source version if not provided
   if source_version is None:
     try:
       # Retrieve the version of the source package
-      source_version = importlib.metadata.version(source)
+      source_version = subprocess.check_output([interpreter, "-c", f"import importlib.metadata; print(importlib.metadata.version('{source}'))"], stderr=subprocess.DEVNULL)
+
+      # Mark source package as installed
+      source_installed = True
 
       # Log detected source package version
       logger.info("detected '%s' with version '%s'", source, source_version)
@@ -84,22 +119,19 @@ def _install(source, source_version, target, target_version):
       if target_version is None:
         # Use the source version
         target_version = source_version
-    except importlib.metadata.PackageNotFoundError:
+    except subprocess.CalledProcessError:
       # Proceed if source package is not installed
       pass
 
-  try:
-    # Check if the source package is installed
-    importlib.metadata.version(source)
-
-    # Uninstall the source package
-    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "--yes", source])
+  if source_installed:
+    try:
+      # Uninstall the source package
+      subprocess.check_call([interpreter, "-m", "pip", "uninstall", "--yes", source])
+    except subprocess.CalledProcessError:
+      _log_and_exit("failed to uninstall '%s'", source)
 
     # Log the uninstallation of the source package
     logger.info("uninstalled source package '%s'", source)
-  except importlib.metadata.PackageNotFoundError:
-    # Proceed if source package is not installed
-    pass
 
   # Create a temporary directory for the transient package
   with tempfile.TemporaryDirectory() as directory:
@@ -109,33 +141,38 @@ def _install(source, source_version, target, target_version):
     # Find the created wheel file
     wheel_file = glob.glob(os.path.join(directory, "*.whl"))[0]
 
-    # Install the transient package
-    subprocess.check_call([sys.executable, "-m", "pip", "install", wheel_file])
+    try:
+      # Install the transient package
+      subprocess.check_call([interpreter, "-m", "pip", "install", wheel_file])
+    except subprocess.CalledProcessError:
+      _log_and_exit("failed to install '%s'", source)
 
     # Log the installation of the transient package
     logger.info("installed transient package '%s'", source)
 
-def _uninstall(package):
+def _uninstall(interpreter, package):
   try:
-    # Retrieve the distribution metadata for the specified package
-    distribution = importlib.metadata.distribution(package)
-    
-    # Read the WHEEL file from the distribution
-    wheel = distribution.read_text("WHEEL")
+    # Retrieve the wheel metadata for the specified package
+    wheel = subprocess.check_output([interpreter, "-c", f"import importlib.metadata; print(importlib.metadata.distribution('{package}').read_text('WHEEL'))"], stderr=subprocess.DEVNULL)
+  except subprocess.CalledProcessError:
+    _log_and_exit("package '%s' not found", package)
 
-    # Check if the package is transient
-    if TRANSIENT_GENERATOR in wheel:
+  # Check if the package is transient
+  if TRANSIENT_GENERATOR in wheel:
+    try:
       # Uninstall the transient package
-      subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "--yes", package])
+      subprocess.check_call([interpreter, "-m", "pip", "uninstall", "--yes", package])
+    except subprocess.CalledProcessError:
+      _log_and_exit("failed to uninstall '%s'", package)
 
-      # Log successful uninstallation of transient package
-      logger.info("uninstalled transient package '%s'", package)
-    else:
-      # Log error if the package is not transient
-      logger.error("package '%s' is not transient", package)
-  except importlib.metadata.PackageNotFoundError:
-    # Log error if the package was not found
-    logger.error("package '%s' not found", package)
+    # Log successful uninstallation of transient package
+    logger.info("uninstalled transient package '%s'", package)
+  else:
+    # Log error if the package is not transient
+    logger.error("package '%s' is not transient", package)
+
+    # Exit the script with an error status
+    sys.exit(1)
 
 ##### ##### ##### ##### #####
 
@@ -144,7 +181,7 @@ def main():
   pass
 
 @main.command()
-@create_params
+@create_options
 @click.option(
   "-od",
   "--output-directory",
@@ -171,7 +208,8 @@ def create(*args, **kwargs):
   return _create(*args, **kwargs)
 
 @main.command()
-@create_params
+@create_options
+@pip_options
 def install(*args, **kwargs):
   """
   Generate and install transient package.
@@ -197,6 +235,7 @@ def install(*args, **kwargs):
   return _install(*args, **kwargs)
 
 @main.command()
+@pip_options
 @click.argument("package")
 def uninstall(*args, **kwargs):
   """
