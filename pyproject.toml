@@ -9,7 +9,7 @@ requires = [
 [project]
 description = "CLI utility for creating transient Python packages."
 name = "transient-package"
-version = "1.0.1"
+version = "1.0.1.post1"
 readme = "README.md"
 requires-python = ">=3.8"
 

@@ -95,7 +95,7 @@ def _log_and_exit(*args, **kwargs):
 
 def _create(source, source_version, target, target_version, output_directory):
   # Check if the target version is not a specifier
-  if target_version and any(char in target_version for char in [ "!", ",", "<", "=", ">", "~" ]):
+  if target_version and not any(char in target_version for char in [ "!", ",", "<", "=", ">", "~" ]):
     # Format it as a specifier
     target_version = f"=={target_version}"
 
@@ -134,11 +134,11 @@ def _install(source, source_version, target, target_version, interpreter):
         src = packaging.version.Version(source_version)
 
         # Define minimum and maximum version strings
-        tgt = f"{src.major}.{src.minor}.{src.micro}"
-        tgt = f"{src.major}.{src.minor}.{src.micro + 1}"
+        tgt_min = f"{src.major}.{src.minor}.{src.micro}"
+        tgt_max = f"{src.major}.{src.minor}.{src.micro + 1}"
 
         # Update the specifier with the version range that includes all post-releases
-        target_version = f">={tgt_min},<{tgt_max}" 
+        target_version = f"<{tgt_max},>={tgt_min}" 
     except subprocess.CalledProcessError:
       # Proceed if source package is not installed
       pass
