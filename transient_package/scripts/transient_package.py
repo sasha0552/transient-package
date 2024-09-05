@@ -3,6 +3,7 @@ import functools
 import glob
 import logging
 import os
+import packaging.version
 import subprocess
 import sys
 import tempfile
@@ -93,12 +94,17 @@ def _log_and_exit(*args, **kwargs):
   sys.exit(1)
 
 def _create(source, source_version, target, target_version, output_directory):
+  # Check if the target version is not a specifier
+  if target_version and any(char in target_version for char in [ "!", ",", "<", "=", ">", "~" ]):
+    # Format it as a specifier
+    target_version = f"=={target_version}"
+
   # Generate the transient package and write it to the target directory
   create_transient_package(
     name=source,
     version=source_version or "0.0.0",
     requirements=[
-      f"{target}=={target_version}" if target_version else target,
+      target + target_version if target_version else target,
     ],
     target=output_directory,
   )
@@ -124,8 +130,15 @@ def _install(source, source_version, target, target_version, interpreter):
 
       # If target version is not provided
       if target_version is None:
-        # Use the source version
-        target_version = source_version
+        # Parse the source version string into a Version object
+        src = packaging.version.Version(source_version)
+
+        # Define minimum and maximum version strings
+        tgt = f"{src.major}.{src.minor}.{src.micro}"
+        tgt = f"{src.major}.{src.minor}.{src.micro + 1}"
+
+        # Update the specifier with the version range that includes all post-releases
+        target_version = f">={tgt_min},<{tgt_max}" 
     except subprocess.CalledProcessError:
       # Proceed if source package is not installed
       pass
@@ -232,7 +245,7 @@ def install(*args, **kwargs):
 
   If the target package version is not specified and the source package
   version is successfully detected, the command will use the source package
-  version.
+  version, but will also include all post-releases.
 
   If detection is unsuccessful, the command defaults to using the latest version.
 
@@ -253,3 +266,9 @@ def uninstall(*args, **kwargs):
   """
 
   return _uninstall(*args, **kwargs)
+
+##### ##### ##### ##### #####
+
+#
+if __name__ == "__main__":
+  main()
