@@ -121,7 +121,7 @@ def _install(source, source_version, target, target_version, interpreter):
     wheel = _invoke_code(interpreter, f"import importlib.metadata; print(importlib.metadata.distribution('{source}').read_text('WHEEL'))")
   except subprocess.CalledProcessError:
     # Proceed if source package is not installed
-    pass
+    wheel = ""
 
   # Check if the package is transient
   if TRANSIENT_GENERATOR in wheel:
