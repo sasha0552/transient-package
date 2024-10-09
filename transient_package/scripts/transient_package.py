@@ -116,6 +116,21 @@ def _install(source, source_version, target, target_version, interpreter):
   # Initialize flag to track if source package is installed
   source_installed = False
 
+  try:
+    # Retrieve the wheel metadata for the specified package
+    wheel = _invoke_code(interpreter, f"import importlib.metadata; print(importlib.metadata.distribution('{source}').read_text('WHEEL'))")
+  except subprocess.CalledProcessError:
+    # Proceed if source package is not installed
+    pass
+
+  # Check if the package is transient
+  if TRANSIENT_GENERATOR in wheel:
+    # Log the status of the source package
+    logger.info("source package '%s' is already transient", source)
+
+    # Exit the script
+    sys.exit(0)
+
   # Detect the source version if not provided
   if source_version is None:
     try:
